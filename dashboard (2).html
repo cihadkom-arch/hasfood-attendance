@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Attendance Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f5f4f0;
+  --surface: #ffffff;
+  --border: rgba(0,0,0,0.08);
+  --text: #1a1a1a;
+  --muted: #6b6b6b;
+  --accent: #1a56db;
+  --success: #057a55;
+  --success-bg: #def7ec;
+  --danger: #c81e1e;
+  --danger-bg: #fde8e8;
+  --warning: #92400e;
+  --warning-bg: #fef3c7;
+  --info: #1e429f;
+  --info-bg: #e1effe;
+  --neutral-bg: #f3f4f6;
+  --neutral: #374151;
+}
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; }
+.app { display: grid; grid-template-columns: 220px 1fr; height: 100vh; }
+
+/* Sidebar */
+.sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.sidebar-header { padding: 24px 20px 20px; border-bottom: 1px solid var(--border); }
+.sidebar-header h1 { font-size: 15px; font-weight: 600; }
+.sidebar-header .subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.nav { padding: 12px 10px; flex: 1; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--muted); border: none; background: none; width: 100%; text-align: left; transition: all 0.1s; }
+.nav-item:hover { background: var(--bg); color: var(--text); }
+.nav-item.active { background: var(--accent); color: #fff; font-weight: 500; }
+.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+.sidebar-footer { padding: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--success); margin-right: 6px; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* Main */
+.main { display: flex; flex-direction: column; overflow: hidden; }
+.topbar { padding: 18px 28px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; }
+.topbar h2 { font-size: 18px; font-weight: 600; }
+.topbar-right { display: flex; gap: 10px; align-items: center; }
+.btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; color: var(--text); transition: background 0.1s; font-weight: 500; }
+.btn:hover { background: var(--bg); }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: #1648c7; }
+.content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+/* Metrics */
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+.metric { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.metric-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+.metric-value { font-size: 32px; font-weight: 700; line-height: 1; }
+.metric-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.metric-value.green { color: var(--success); }
+.metric-value.red { color: var(--danger); }
+.metric-value.amber { color: #d97706; }
+.metric-value.blue { color: var(--accent); }
+
+/* Table */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+.card-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.card-head h3 { font-size: 14px; font-weight: 600; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 10px 16px; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); background: var(--bg); }
+td { padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--bg); }
+.avatar { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+.emp-cell { display: flex; align-items: center; gap: 10px; }
+.badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 500; }
+.badge.present   { background: var(--success-bg); color: var(--success); }
+.badge.checkedout{ background: var(--success-bg); color: var(--success); }
+.badge.sick      { background: var(--warning-bg); color: var(--warning); }
+.badge.holiday   { background: var(--info-bg); color: var(--info); }
+.badge.other     { background: var(--neutral-bg); color: var(--neutral); }
+.badge.absent    { background: var(--danger-bg); color: var(--danger); }
+.badge.noscan    { background: var(--neutral-bg); color: var(--neutral); }
+
+/* Absence modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: var(--surface); border-radius: 16px; padding: 28px; width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+.modal h3 { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+.modal .sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+.absence-grid { display: grid; gap: 8px; margin-bottom: 16px; }
+.absence-btn { padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); font-size: 14px; cursor: pointer; text-align: left; transition: background 0.1s; display: flex; align-items: center; gap: 10px; }
+.absence-btn:hover { background: var(--bg); }
+.cancel-btn { width: 100%; padding: 10px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; }
+
+/* QR grid */
+.qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
+.qr-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; text-align: center; }
+.qr-card .qr-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.qr-card .qr-id { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+.qr-box { width: 130px; height: 130px; margin: 0 auto 12px; }
+
+/* Add employee form */
+.form-row { display: flex; gap: 10px; margin-bottom: 16px; }
+.form-row input { flex: 1; padding: 9px 13px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--bg); color: var(--text); }
+.form-row input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+/* Search */
+.search-row { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+.search-row input, .search-row select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--bg); color: var(--text); }
+.search-row input { flex: 1; min-width: 160px; }
+
+/* Toast */
+.toast { position: fixed; bottom: 24px; right: 24px; background: var(--text); color: var(--surface); padding: 12px 18px; border-radius: 10px; font-size: 14px; z-index: 200; opacity: 0; transform: translateY(8px); transition: all 0.2s; pointer-events: none; max-width: 300px; }
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* Tabs hidden */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Loading */
+.loading-row td { text-align: center; color: var(--muted); padding: 40px; }
+
+/* Manual time edit */
+.time-input { width: 90px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--bg); color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h1>📋 Attendance</h1>
+      <div class="subtitle" id="sidebar-date"></div>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" onclick="showTab('today')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Today
+      </button>
+      <button class="nav-item" onclick="showTab('history')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        History
+      </button>
+      <button class="nav-item" onclick="showTab('qrcodes')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        QR Codes
+      </button>
+      <button class="nav-item" onclick="showTab('employees')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Employees
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="live-dot"></span> Live sync every 30s
+      <br><br>
+      <button class="btn" style="width:100%;justify-content:center;" onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <h2 id="topbar-title">Today's Attendance</h2>
+      <div class="topbar-right">
+        <span style="font-size:13px;color:var(--muted);" id="live-clock"></span>
+        <button class="btn" onclick="loadAll()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- TODAY -->
+      <div class="tab-content active" id="tab-today">
+        <div class="metrics" id="metrics"></div>
+        <div class="card">
+          <div class="card-head">
+            <h3>All employees</h3>
+            <input type="text" placeholder="Search…" id="today-search" oninput="renderTodayTable()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;background:var(--bg);width:180px;" />
+          </div>
+          <table>
+            <thead><tr><th>Employee</th><th>Status</th><th>Check-in</th><th>Check-out</th><th>Hours</th><th>Action</th></tr></thead>
+            <tbody id="today-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- HISTORY -->
+      <div class="tab-content" id="tab-history">
+        <div class="search-row">
+          <input type="date" id="hist-date" onchange="loadHistory()" />
+          <select id="hist-emp" onchange="loadHistory()"><option value="">All employees</option></select>
+          <select id="hist-status" onchange="loadHistory()">
+            <option value="">All statuses</option>
+            <option value="present">Present</option>
+            <option value="checkedout">Checked out</option>
+            <option value="sick">Sick leave</option>
+            <option value="holiday">Day off</option>
+            <option value="absent">Absent</option>
+            <option value="other">Other</option>
+          </select>
+          <button class="btn" onclick="loadHistory()">Filter</button>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Employee</th><th>Date</th><th>Status</th><th>Check-in</th><th>Check-out</th><th>Hours</th><th>Edit</th></tr></thead>
+            <tbody id="history-tbody"><tr class="loading-row"><td colspan="7">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- QR CODES -->
+      <div class="tab-content" id="tab-qrcodes">
+        <div class="search-row" style="margin-bottom:16px;">
+          <input type="text" placeholder="Search employee…" id="qr-search" oninput="renderQRGrid()" />
+          <button class="btn btn-primary" onclick="printAllQR()">🖨 Print all</button>
+        </div>
+        <div class="qr-grid" id="qr-grid"></div>
+      </div>
+
+      <!-- EMPLOYEES -->
+      <div class="tab-content" id="tab-employees">
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-head"><h3>Add new employee</h3></div>
+          <div style="padding:18px;">
+            <div class="form-row">
+              <input type="text" id="new-name" placeholder="Full name" />
+              <button class="btn btn-primary" onclick="addEmployee()">+ Add & generate QR</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h3>All employees (<span id="emp-count">0</span>)</h3>
+            <input type="text" placeholder="Search…" id="emp-search" oninput="renderEmpList()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;background:var(--bg);width:180px;" />
+          </div>
+          <table>
+            <thead><tr><th>Employee</th><th>ID</th><th>Added</th><th>Action</th></tr></thead>
+            <tbody id="emp-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Absence Modal -->
+<div class="modal-overlay" id="modal" style="display:none;">
+  <div class="modal">
+    <h3>Mark absence</h3>
+    <div class="sub" id="modal-sub"></div>
+    <div class="absence-grid">
+      <button class="absence-btn" onclick="setAbsence('sick')">🤒 Sick leave</button>
+      <button class="absence-btn" onclick="setAbsence('holiday')">🏖 Legal day off</button>
+      <button class="absence-btn" onclick="setAbsence('other')">📋 Other absence</button>
+      <button class="absence-btn" onclick="setAbsence('absent')">✗ Absent (no reason)</button>
+    </div>
+    <button class="cancel-btn" onclick="closeModal()">Cancel</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://jfvjtutflvowhekxllnm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_us3E-IgY_UWiXhP6QtoqLg_FIBL_qR_';
+const SCAN_BASE_URL = 'https://hasfoodqr.netlify.app/scan.html';
+const HEADERS = {
+  'apikey': SUPABASE_KEY,
+  'Authorization': 'Bearer ' + SUPABASE_KEY,
+  'Content-Type': 'application/json',
+  'Prefer': 'return=representation'
+};
+const COLORS = ['#4f8ef7','#22c97a','#f05a5a','#f5a623','#a855f7','#14b8a6','#ec4899','#f97316','#06b6d4','#84cc16'];
+
+let employees = [];
+let todayRecords = [];
+let modalEmpId = null;
+let activeTab = 'today';
+
+function today() { return new Date().toISOString().slice(0,10); }
+function timeNow() { return new Date().toTimeString().slice(0,5); }
+function initials(name) { const p = name.trim().split(' '); return p.length===1?p[0].slice(0,2).toUpperCase():(p[0][0]+p[p.length-1][0]).toUpperCase(); }
+
+async function api(method, path, body) {
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+    method, headers: HEADERS, body: body ? JSON.stringify(body) : undefined
+  });
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show';
+  setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  const navItems = document.querySelectorAll('.nav-item');
+  const map = ['today','history','qrcodes','employees'];
+  navItems[map.indexOf(name)]?.classList.add('active');
+  const titles = { today:"Today's Attendance", history:"Attendance History", qrcodes:"Employee QR Codes", employees:"Manage Employees" };
+  document.getElementById('topbar-title').textContent = titles[name];
+  activeTab = name;
+  if (name === 'today') renderTodayTable();
+  if (name === 'history') { populateHistoryFilter(); loadHistory(); }
+  if (name === 'qrcodes') renderQRGrid();
+  if (name === 'employees') renderEmpList();
+}
+
+// ---- LOAD ALL ----
+async function loadAll() {
+  try {
+    const [emps, recs] = await Promise.all([
+      api('GET', 'employees?select=*&order=name.asc'),
+      api('GET', `attendance?date=eq.${today()}&select=*`)
+    ]);
+    employees = emps || [];
+    todayRecords = recs || [];
+    renderMetrics();
+    renderTodayTable();
+  } catch(e) { showToast('Connection error — check your internet'); }
+}
+
+// ---- METRICS ----
+function renderMetrics() {
+  const present = todayRecords.filter(r => r.status === 'present' || r.status === 'checkedout').length;
+  const sick = todayRecords.filter(r => r.status === 'sick').length;
+  const holiday = todayRecords.filter(r => r.status === 'holiday' || r.status === 'other').length;
+  const absent = employees.length - todayRecords.length;
+  document.getElementById('metrics').innerHTML = `
+    <div class="metric"><div class="metric-label">Present</div><div class="metric-value green">${present}</div><div class="metric-sub">of ${employees.length} employees</div></div>
+    <div class="metric"><div class="metric-label">No scan yet</div><div class="metric-value red">${absent < 0 ? 0 : absent}</div><div class="metric-sub">auto-absent if not scanned</div></div>
+    <div class="metric"><div class="metric-label">Sick leave</div><div class="metric-value amber">${sick}</div></div>
+    <div class="metric"><div class="metric-label">Day off / other</div><div class="metric-value blue">${holiday}</div></div>
+  `;
+}
+
+// ---- TODAY TABLE ----
+function renderTodayTable() {
+  const q = (document.getElementById('today-search')?.value || '').toLowerCase();
+  const filtered = employees.filter(e => e.name.toLowerCase().includes(q));
+  const tbody = document.getElementById('today-tbody');
+  if (!filtered.length) { tbody.innerHTML = '<tr class="loading-row"><td colspan="6">No employees found</td></tr>'; return; }
+  tbody.innerHTML = filtered.map(emp => {
+    const rec = todayRecords.find(r => r.emp_id === emp.id);
+    const status = rec ? rec.status : 'noscan';
+    const statusLabel = { present:'Present', checkedout:'Checked out', sick:'Sick leave', holiday:'Day off', other:'Other', absent:'Absent', noscan:'No scan' }[status];
+    const checkIn = rec?.check_in ? rec.check_in.slice(0,5) : '—';
+    const checkOut = rec?.check_out ? rec.check_out.slice(0,5) : '—';
+    const hours = rec?.hours ? parseFloat(rec.hours).toFixed(1)+'h' : '—';
+    let action = '';
+    if (!rec || status === 'noscan' || status === 'absent') {
+      action = `<button class="btn" style="font-size:12px;padding:4px 10px;" onclick="openModal('${emp.id}')">Mark absence</button>
+                <button class="btn btn-primary" style="font-size:12px;padding:4px 10px;" onclick="manualCheckIn('${emp.id}')">Check in</button>`;
+    } else if (status === 'present') {
+      action = `<button class="btn btn-primary" style="font-size:12px;padding:4px 10px;" onclick="manualCheckOut('${emp.id}')">Check out</button>`;
+    } else {
+      action = `<span style="font-size:12px;color:var(--muted);">✓ Done</span>`;
+    }
+    return `<tr>
+      <td><div class="emp-cell"><div class="avatar" style="background:${emp.color}22;color:${emp.color};">${initials(emp.name)}</div>${emp.name}</div></td>
+      <td><span class="badge ${status}">${statusLabel}</span></td>
+      <td>${checkIn}</td>
+      <td>${checkOut}</td>
+      <td>${hours}</td>
+      <td>${action}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ---- MANUAL CHECK IN/OUT ----
+async function manualCheckIn(empId) {
+  try {
+    await api('POST', 'attendance', { emp_id: empId, date: today(), status: 'present', check_in: timeNow(), check_out: null, hours: null });
+    await loadAll(); showToast('Checked in');
+  } catch(e) { showToast('Error — try again'); }
+}
+
+async function manualCheckOut(empId) {
+  const rec = todayRecords.find(r => r.emp_id === empId);
+  if (!rec) return;
+  const inParts = rec.check_in.slice(0,5).split(':').map(Number);
+  const outParts = timeNow().split(':').map(Number);
+  const mins = (outParts[0]*60+outParts[1]) - (inParts[0]*60+inParts[1]);
+  try {
+    await api('PATCH', `attendance?id=eq.${rec.id}`, { status: 'checkedout', check_out: timeNow(), hours: parseFloat((mins/60).toFixed(2)) });
+    await loadAll(); showToast('Checked out — '+(mins/60).toFixed(1)+'h');
+  } catch(e) { showToast('Error — try again'); }
+}
+
+// ---- ABSENCE MODAL ----
+function openModal(empId) {
+  modalEmpId = empId;
+  const emp = employees.find(e => e.id === empId);
+  document.getElementById('modal-sub').textContent = emp ? emp.name : empId;
+  document.getElementById('modal').style.display = 'flex';
+}
+function closeModal() { document.getElementById('modal').style.display = 'none'; modalEmpId = null; }
+async function setAbsence(type) {
+  if (!modalEmpId) return;
+  const existing = todayRecords.find(r => r.emp_id === modalEmpId);
+  try {
+    if (existing) {
+      await api('PATCH', `attendance?id=eq.${existing.id}`, { status: type });
+    } else {
+      await api('POST', 'attendance', { emp_id: modalEmpId, date: today(), status: type, check_in: null, check_out: null, hours: null });
+    }
+    closeModal(); await loadAll(); showToast('Absence recorded');
+  } catch(e) { showToast('Error — try again'); }
+}
+
+// ---- HISTORY ----
+function populateHistoryFilter() {
+  const sel = document.getElementById('hist-emp');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All employees</option>';
+  employees.forEach(e => { sel.innerHTML += `<option value="${e.id}" ${cur===e.id?'selected':''}>${e.name}</option>`; });
+}
+async function loadHistory() {
+  const date = document.getElementById('hist-date')?.value || '';
+  const emp = document.getElementById('hist-emp')?.value || '';
+  const status = document.getElementById('hist-status')?.value || '';
+  let q = 'attendance?select=*&order=date.desc,check_in.desc';
+  if (date) q += `&date=eq.${date}`;
+  if (emp) q += `&emp_id=eq.${emp}`;
+  if (status) q += `&status=eq.${status}`;
+  const tbody = document.getElementById('history-tbody');
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="7">Loading…</td></tr>';
+  try {
+    const recs = await api('GET', q);
+    if (!recs || !recs.length) { tbody.innerHTML = '<tr class="loading-row"><td colspan="7">No records found</td></tr>'; return; }
+    tbody.innerHTML = recs.map(r => {
+      const emp = employees.find(e => e.id === r.emp_id);
+      const name = emp ? emp.name : r.emp_id;
+      const statusLabel = { present:'Present', checkedout:'Checked out', sick:'Sick leave', holiday:'Day off', other:'Other', absent:'Absent', noscan:'No scan' }[r.status] || r.status;
+      const hrs = r.hours ? parseFloat(r.hours).toFixed(1)+'h' : '—';
+      return `<tr>
+        <td><div class="emp-cell">${emp?`<div class="avatar" style="background:${emp.color}22;color:${emp.color};">${initials(emp.name)}</div>`:''}${name}</div></td>
+        <td>${r.date}</td>
+        <td><span class="badge ${r.status}">${statusLabel}</span></td>
+        <td>${r.check_in ? r.check_in.slice(0,5) : '—'}</td>
+        <td>${r.check_out ? r.check_out.slice(0,5) : '—'}</td>
+        <td>${hrs}</td>
+        <td><button class="btn" style="font-size:12px;padding:4px 8px;" onclick="deleteRecord('${r.id}')">✕</button></td>
+      </tr>`;
+    }).join('');
+  } catch(e) { tbody.innerHTML = '<tr class="loading-row"><td colspan="7">Error loading data</td></tr>'; }
+}
+async function deleteRecord(id) {
+  if (!confirm('Delete this record?')) return;
+  await api('DELETE', `attendance?id=eq.${id}`);
+  loadHistory(); showToast('Record deleted');
+}
+
+// ---- QR CODES ----
+const qrInstances = {};
+function renderQRGrid() {
+  const q = (document.getElementById('qr-search')?.value || '').toLowerCase();
+  const filtered = employees.filter(e => e.name.toLowerCase().includes(q));
+  const grid = document.getElementById('qr-grid');
+  grid.innerHTML = '';
+  filtered.forEach(emp => {
+    const div = document.createElement('div');
+    div.className = 'qr-card';
+    const scanUrl = `${SCAN_BASE_URL}?id=${emp.id}`;
+    div.innerHTML = `
+      <div class="avatar" style="background:${emp.color}22;color:${emp.color};margin:0 auto 8px;width:36px;height:36px;">${initials(emp.name)}</div>
+      <div class="qr-name">${emp.name}</div>
+      <div class="qr-id">${emp.id}</div>
+      <div class="qr-box" id="qr-${emp.id}"></div>
+      <button class="btn" style="width:100%;font-size:12px;justify-content:center;" onclick="printQR('${emp.id}','${emp.name.replace(/'/g,"\\'")}')">🖨 Print</button>
+    `;
+    grid.appendChild(div);
+    setTimeout(() => {
+      const el = document.getElementById('qr-' + emp.id);
+      if (!el || el.querySelector('canvas')) return;
+      const scanUrl2 = `${SCAN_BASE_URL}?id=${emp.id}`;
+      try { new QRCode(el, { text: scanUrl2, width: 130, height: 130, correctLevel: QRCode.CorrectLevel.H }); } catch(e) {}
+    }, 80);
+  });
+}
+
+function getQRDataUrl(empId) {
+  const el = document.getElementById('qr-' + empId);
+  const canvas = el ? el.querySelector('canvas') : null;
+  return canvas ? canvas.toDataURL() : '';
+}
+
+function printQR(empId, name) {
+  const img = getQRDataUrl(empId);
+  const win = window.open('','_blank');
+  win.document.write(`<html><body style="text-align:center;font-family:sans-serif;padding:60px;">
+    <div style="border:2px solid #ddd;border-radius:12px;padding:32px;display:inline-block;">
+      <p style="font-size:20px;font-weight:700;margin-bottom:4px;">${name}</p>
+      <p style="font-size:13px;color:#999;margin-bottom:20px;">${empId}</p>
+      <img src="${img}" width="180" height="180" style="display:block;margin:0 auto;" />
+      <p style="font-size:12px;color:#bbb;margin-top:16px;">Scan to register arrival & departure</p>
+    </div>
+    <script>window.onload=function(){window.print();window.close();}<\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+function printAllQR() {
+  let cards = '';
+  employees.forEach(emp => {
+    const img = getQRDataUrl(emp.id);
+    cards += `<div style="text-align:center;border:1px solid #ddd;border-radius:8px;padding:20px;break-inside:avoid;">
+      <p style="font-weight:700;font-size:14px;margin-bottom:4px;">${emp.name}</p>
+      <p style="font-size:11px;color:#999;margin-bottom:12px;">${emp.id}</p>
+      <img src="${img}" width="130" height="130" />
+      <p style="font-size:10px;color:#ccc;margin-top:8px;">Scan to register</p>
+    </div>`;
+  });
+  const win = window.open('','_blank');
+  win.document.write(`<html><body style="font-family:sans-serif;padding:20px;">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">${cards}</div>
+    <script>window.onload=function(){window.print();window.close();}<\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+// ---- EMPLOYEES ----
+async function addEmployee() {
+  const name = document.getElementById('new-name').value.trim();
+  if (!name) { showToast('Enter a name first'); return; }
+  if (employees.find(e => e.name.toLowerCase() === name.toLowerCase())) { showToast('Employee already exists'); return; }
+  const id = 'EMP' + String(employees.length + 1).padStart(3,'0');
+  const color = COLORS[employees.length % COLORS.length];
+  try {
+    await api('POST', 'employees', { id, name, color });
+    document.getElementById('new-name').value = '';
+    await loadAll(); renderEmpList();
+    showToast(`${name} added — ID: ${id}`);
+  } catch(e) { showToast('Error adding employee'); }
+}
+
+function renderEmpList() {
+  const q = (document.getElementById('emp-search')?.value || '').toLowerCase();
+  const filtered = employees.filter(e => e.name.toLowerCase().includes(q));
+  document.getElementById('emp-count').textContent = employees.length;
+  document.getElementById('emp-tbody').innerHTML = filtered.map(emp => `
+    <tr>
+      <td><div class="emp-cell"><div class="avatar" style="background:${emp.color}22;color:${emp.color};">${initials(emp.name)}</div>${emp.name}</div></td>
+      <td><code style="font-size:12px;background:var(--bg);padding:2px 7px;border-radius:4px;">${emp.id}</code></td>
+      <td style="color:var(--muted);font-size:13px;">${emp.added_at ? new Date(emp.added_at).toLocaleDateString('en-BE') : '—'}</td>
+      <td>
+        <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="showTab('qrcodes');setTimeout(()=>{document.getElementById('qr-search').value='${emp.name}';renderQRGrid();},100)">QR Code</button>
+        <button class="btn" style="font-size:12px;padding:4px 10px;color:var(--danger);" onclick="removeEmployee('${emp.id}','${emp.name.replace(/'/g,"\\'")}')">Remove</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function removeEmployee(id, name) {
+  if (!confirm(`Remove ${name}? Their attendance history will be kept.`)) return;
+  try {
+    await api('DELETE', `employees?id=eq.${id}`);
+    await loadAll(); renderEmpList(); showToast(`${name} removed`);
+  } catch(e) { showToast('Error removing employee'); }
+}
+
+// ---- EXPORT ----
+async function exportCSV() {
+  const recs = await api('GET', 'attendance?select=*&order=date.desc');
+  let csv = 'Employee,ID,Date,Status,Check-in,Check-out,Hours\n';
+  (recs||[]).forEach(r => {
+    const emp = employees.find(e => e.id === r.emp_id);
+    csv += `"${emp?emp.name:r.emp_id}","${r.emp_id}","${r.date}","${r.status}","${r.check_in||''}","${r.check_out||''}","${r.hours||''}"\n`;
+  });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `attendance_${today()}.csv`; a.click();
+  showToast('Exported');
+}
+
+// ---- CLOCK & AUTO REFRESH ----
+function updateClock() {
+  const el = document.getElementById('live-clock');
+  if (el) el.textContent = new Date().toTimeString().slice(0,5);
+}
+setInterval(updateClock, 1000);
+setInterval(loadAll, 30000);
+
+document.getElementById('sidebar-date').textContent = new Date().toLocaleDateString('en-BE', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+// Seed employees from localStorage if Supabase is empty (first run)
+async function seedIfEmpty() {
+  const existing = await api('GET', 'employees?select=id&limit=1');
+  if (existing && existing.length > 0) { await loadAll(); return; }
+  const SEED = [
+    'SALI KOSE','CIHAD SOZSAV','FRANKY VENNEKENS','SEMIH KERSE','HAYSAM',
+    'MUZEYYEN IRIK','SALIF IRIK','OMER YIGIT','SATILMIS CAYBASI','BERKAYA OZER',
+    'SAHIL HIDAYETULLAH','ZEKI IMAM','SEVGINAR IMAM','MOHAMMED NOORI','GULTEN UGURLU',
+    'ZUBEYDE CIFTCI','NURSENA CIFTCI','FATIH CIFTCI','TUNCAY CAFER','HASAN DOKUYUCU',
+    'FATIH CAN DOKUYUCU','SEYFETTIN ALPTEKIN','GUNAY','TUNCAY KAYA','KERIM GOLCEK',
+    'BILAL KAYA','LEYLA CAFER','SEVCAN','HAMZA','AHMAD ALI IBRAHIM','YAHYA',
+    'ETHEM GENC','DOGAN CETIN','TUNCAY CUKUR'
+  ];
+  const COLORS2 = ['#4f8ef7','#22c97a','#f05a5a','#f5a623','#a855f7','#14b8a6','#ec4899','#f97316','#06b6d4','#84cc16'];
+  const batch = SEED.map((name, i) => ({ id: 'EMP'+String(i+1).padStart(3,'0'), name, color: COLORS2[i%COLORS2.length] }));
+  await api('POST', 'employees', batch);
+  await loadAll();
+  showToast('34 employees loaded into database!');
+}
+
+seedIfEmpty();
+</script>
+</body>
+</html>
